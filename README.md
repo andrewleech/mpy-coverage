@@ -1,154 +1,160 @@
 # mpy-coverage
 
-Split-architecture code coverage for MicroPython: a lightweight on-device tracer paired with host-side reporting via coverage.py.
+Code coverage for MicroPython. Lightweight on-device tracer using `sys.settrace`, with host-side reporting via coverage.py.
 
-## Installation
+The tracer runs on the MicroPython target (unix port or real hardware with settrace enabled), collects executed line data, and exports it as JSON. The host-side tooling then merges multiple runs and generates reports using coverage.py's reporting engine.
+
+## Install
 
 ```bash
 pip install mpy-coverage
 ```
 
-Or for development:
+This pulls in `coverage` and `mpy-cross` automatically.
+
+Dev setup:
 ```bash
 git clone git@github.com:andrewleech/mpy-coverage.git
 cd mpy-coverage
-pip install -e .
+uv sync
 ```
 
-## Prerequisites
+## Getting started
 
-**MicroPython binary** (for unix-port testing):
+You need a micropython binary with settrace support. The quickest way is the unix coverage variant:
 ```bash
 cd ports/unix && make submodules && make VARIANT=coverage
 ```
 
-**mpy-cross** (for the `mpy` analysis method):
-```bash
-cd mpy-cross && make
+Say you have a module `myapp.py` and a test script `test_myapp.py` that exercises it:
+
+```python
+# test_myapp.py
+import myapp
+myapp.run()
 ```
 
-**Hardware targets:** firmware must be built with `MICROPY_PY_SYS_SETTRACE=1`.
+Collect coverage and generate a report:
+```bash
+mpy-coverage run test_myapp.py --include myapp --show-missing
+mpy-coverage report --show-missing
+```
 
-## Quick Start (CLI)
+That's it. The run command executes `test_myapp.py` under micropython with the tracer active, saves a JSON data file to `.mpy_coverage/`, and the report command reads it and prints a coverage summary.
 
-Each test run stores a timestamped JSON file; the report command merges all collected data.
+For an HTML report instead:
+```bash
+mpy-coverage report --format html --output-dir htmlcov
+```
+
+If you have multiple test files, run each one separately then generate a single merged report:
+```bash
+mpy-coverage run tests/test_network.py --include myapp
+mpy-coverage run tests/test_storage.py --include myapp
+mpy-coverage report --show-missing
+```
+
+## Prerequisites
+
+For unix-port testing you need a micropython coverage build:
+```bash
+cd ports/unix && make submodules && make VARIANT=coverage
+```
+
+Hardware targets need firmware built with `MICROPY_PY_SYS_SETTRACE=1`.
+
+## Usage
+
+Each test run stores a timestamped JSON file, the report command merges all collected data.
 
 ```bash
-# Collect coverage for individual tests
 mpy-coverage run test_foo.py --include myapp
 mpy-coverage run test_bar.py --include myapp
-
-# Generate merged report
 mpy-coverage report --method auto --show-missing
-
-# List collected data files
-mpy-coverage list
-
-# Remove collected data
-mpy-coverage clean
 ```
 
-The micropython binary is auto-detected from PATH or `ports/unix/build-coverage/micropython` relative to CWD. Override with `--micropython`.
+micropython binary is auto-detected from PATH or `ports/unix/build-coverage/micropython` relative to CWD. Override with `--micropython`. Also works as `python -m mpy_coverage`.
 
-Also runnable as `python -m mpy_coverage`.
-
-### Hardware targets
+### Hardware
 
 ```bash
-# Auto-deploys tracer to device, runs test, collects data
-mpy-coverage run test_foo.py \
-    --device /dev/serial/by-id/usb-... \
-    --include myapp
+# deploys tracer to device automatically, runs test, collects data
+mpy-coverage run test_foo.py --device /dev/serial/by-id/usb-... --include myapp
 
-# Skip auto-deploy if mpy_coverage.py is already on device
-mpy-coverage run test_foo.py \
-    --device /dev/serial/by-id/usb-... \
-    --no-deploy --include myapp
+# skip deploy if mpy_coverage.py is already on device
+mpy-coverage run test_foo.py --device /dev/serial/by-id/usb-... --no-deploy --include myapp
 ```
 
-### Multi-pass workflow
+### Multi-pass
 
+Run tests separately, accumulate data, generate one merged report:
 ```bash
 mpy-coverage run tests/test_network.py --include myapp
 mpy-coverage run tests/test_storage.py --include myapp
 mpy-coverage run tests/test_ui.py --include myapp
-
-# Report merges all .json files from the data directory
 mpy-coverage report --show-missing --format html --output-dir htmlcov
 ```
 
-Data files are stored in `.mpy_coverage/` by default (override with `--data-dir`).
+Data stored in `.mpy_coverage/` by default, override with `--data-dir`.
 
-## Manual API
+Other subcommands: `mpy-coverage list` and `mpy-coverage clean`.
 
-For direct control over the tracer without the CLI wrapper:
+## Tracer API
+
+For direct use without the CLI wrapper. This runs on the MicroPython device, not the host.
 
 ```python
-# On MicroPython (unix coverage variant or settrace-enabled firmware)
 import mpy_coverage
 
 mpy_coverage.start(include=['myapp'], collect_executable=True)
 import myapp
 myapp.main()
 mpy_coverage.stop()
-mpy_coverage.export_json('coverage.json')
+mpy_coverage.export_json('coverage.json')  # to file
+mpy_coverage.export_json()                 # to stdout with delimiters
 ```
 
-```bash
-# On host
-python -m mpy_coverage.report coverage.json --method co_lines --show-missing
-```
-
-## Executable Line Detection Methods
-
-| Method | Where | Pros | Cons |
-|--------|-------|------|------|
-| `co_lines` | On-device | No host tools needed, exact MicroPython view | Only sees called functions |
-| `ast` | Host CPython | Sees all code, matches coverage.py conventions | May differ from MicroPython's view |
-| `mpy` | Host via mpy-cross | Exact MicroPython bytecode view, sees all code | Requires mpy-cross binary |
-
-Use `--method auto` (default) which uses `mpy` — the most accurate method for MicroPython since it reflects the actual bytecode the VM executes.
-
-## On-Device Tracer API
-
+Context manager form:
 ```python
-import mpy_coverage
-
-# Functional API
-mpy_coverage.start(include=['mymod'], exclude=['test_'], collect_executable=False)
-# ... run code ...
-mpy_coverage.stop()
-data = mpy_coverage.get_data()
-mpy_coverage.export_json('out.json')    # to file
-mpy_coverage.export_json()              # to stdout with serial delimiters
-
-# Context manager
 with mpy_coverage.coverage(include=['mymod'], collect_executable=True):
     import mymod
     mymod.run()
 ```
 
-Filtering uses substring matching on filenames. `mpy_coverage` itself is always excluded.
+Filtering is substring matching on filenames. The tracer always excludes itself.
 
-## JSON Data Format
+Then on the host:
+```bash
+python -m mpy_coverage.report coverage.json --method co_lines --show-missing
+```
+
+## Executable line detection
+
+Three methods for determining which lines are executable:
+
+| Method | Runs on | Notes |
+|--------|---------|-------|
+| `co_lines` | Device | No host tools needed, but only sees lines in functions that were actually called |
+| `ast` | Host (CPython) | Sees all code, may disagree with MicroPython's grammar on edge cases |
+| `mpy` | Host (mpy-cross) | Most accurate -- reflects actual MicroPython bytecode, sees all code |
+
+`--method auto` (default) uses `mpy`.
+
+## JSON format
 
 ```json
 {
-  "executed": {
-    "filename.py": [1, 3, 5, 7]
-  },
-  "executable": {
-    "filename.py": [1, 2, 3, 5, 6, 7, 10]
-  }
+  "executed": {"filename.py": [1, 3, 5, 7]},
+  "executable": {"filename.py": [1, 2, 3, 5, 6, 7, 10]}
 }
 ```
 
-`executable` is only present when `collect_executable=True` was used.
+`executable` key only present when `collect_executable=True`.
 
 ## Limitations
 
-- **settrace overhead:** tracing adds significant runtime cost; not suitable for timing-sensitive code
-- **co_lines incompleteness:** only reports executable lines for functions that were entered; uncalled functions are invisible rather than showing 0%
-- **bytecode only:** native/viper functions are not traced by settrace
-- **memory on constrained devices:** large `_executed` dicts may hit memory limits on small targets
-- **coverage.py private API:** the report integration overrides `Coverage._get_file_reporter()` which may change across coverage.py versions
+- settrace adds significant runtime overhead, not suitable for timing-sensitive code
+- `co_lines` method only reports executable lines for functions that were entered, uncalled functions are invisible rather than showing 0%
+- native/viper functions are not traced by settrace
+- large `_executed` dicts may hit memory limits on constrained devices
+- report integration overrides `Coverage._get_file_reporter()` which is a private API and may change across coverage.py versions
