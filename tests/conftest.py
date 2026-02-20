@@ -19,12 +19,14 @@ def _make_test(trial_fn):
     @requires_micropython
     def test(self):
         assert trial_fn()
+
     test.__doc__ = trial_fn.__doc__
     return test
 
 
 class TestCoverageTrials:
     """Integration tests requiring a micropython binary."""
+
     pass
 
 

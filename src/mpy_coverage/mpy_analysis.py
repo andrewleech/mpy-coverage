@@ -13,7 +13,6 @@ import os
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 
 
 def _setup_mpy_tool_from_dir(mpy_tools_dir):
@@ -76,6 +75,7 @@ def _setup_mpy_tool(mpy_tools_dir=None):
         return _setup_mpy_tool_from_dir(mpy_tools_dir)
 
     from mpy_coverage._vendor import mpy_tool
+
     # Initialize global_qstrs which is required for read_mpy() to work
     mpy_tool.global_qstrs = mpy_tool.GlobalQStrList()
     return mpy_tool
@@ -145,14 +145,10 @@ def _compile_to_mpy(py_file, mpy_cross, temp_mpy_file):
         raise RuntimeError(f"Compilation of {py_file} timed out")
 
     if result.returncode != 0:
-        raise RuntimeError(
-            f"mpy-cross compilation failed for {py_file}: {result.stderr}"
-        )
+        raise RuntimeError(f"mpy-cross compilation failed for {py_file}: {result.stderr}")
 
 
-def get_executable_lines(
-    py_files, source_root=None, mpy_cross="mpy-cross", mpy_tools_dir=None
-):
+def get_executable_lines(py_files, source_root=None, mpy_cross="mpy-cross", mpy_tools_dir=None):
     """
     Compile .py files to .mpy and extract executable line numbers.
 
@@ -207,16 +203,16 @@ def get_executable_lines(
                 # def/class syntax is identical between MicroPython and CPython.
                 try:
                     import ast as ast_mod
+
                     with open(py_file, encoding="utf-8") as f:
                         tree = ast_mod.parse(f.read())
                     for node in ast_mod.walk(tree):
-                        if isinstance(node, (ast_mod.FunctionDef,
-                                             ast_mod.AsyncFunctionDef,
-                                             ast_mod.ClassDef)):
+                        if isinstance(
+                            node, (ast_mod.FunctionDef, ast_mod.AsyncFunctionDef, ast_mod.ClassDef)
+                        ):
                             lines.add(node.lineno)
                 except Exception as e:
-                    print(f"Warning: AST patch-up failed for {py_file}: {e}",
-                          file=sys.stderr)
+                    print(f"Warning: AST patch-up failed for {py_file}: {e}", file=sys.stderr)
 
                 result[py_file] = lines
 
@@ -234,12 +230,8 @@ def get_executable_lines(
 
 def main():
     """CLI entry point for the script."""
-    parser = argparse.ArgumentParser(
-        description="Extract executable line numbers from .mpy files"
-    )
-    parser.add_argument(
-        "files", nargs="+", help="Python .py files to analyze"
-    )
+    parser = argparse.ArgumentParser(description="Extract executable line numbers from .mpy files")
+    parser.add_argument("files", nargs="+", help="Python .py files to analyze")
     parser.add_argument(
         "--source-root",
         default=None,
@@ -273,9 +265,7 @@ def main():
 
         if args.json:
             # Convert sets to sorted lists for JSON serialization
-            json_result = {
-                filename: sorted(lines) for filename, lines in result.items()
-            }
+            json_result = {filename: sorted(lines) for filename, lines in result.items()}
             print(json.dumps(json_result, indent=2))
         else:
             # Human-readable output

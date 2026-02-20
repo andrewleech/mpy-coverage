@@ -62,15 +62,11 @@ def _generate_wrapper_script(test_script, include, exclude, mode="unix"):
     exc_arg = repr(exclude) if exclude else "None"
 
     if mode == "unix":
-        run_line = (
-            f'exec(compile(open("{abs_test}").read(), "{abs_test}", "exec"))'
-        )
+        run_line = f'exec(compile(open("{abs_test}").read(), "{abs_test}", "exec"))'
     else:
         # Hardware: test script is deployed alongside wrapper
         basename = os.path.basename(test_script)
-        run_line = (
-            f'exec(compile(open("{basename}").read(), "{basename}", "exec"))'
-        )
+        run_line = f'exec(compile(open("{basename}").read(), "{basename}", "exec"))'
 
     return (
         "import mpy_coverage\n"
@@ -128,9 +124,7 @@ def _run_unix(args, test_script, include, exclude, data_dir):
     # Write wrapper to a temp file in the current working directory so that
     # relative imports from the test script work correctly.
     cwd = os.getcwd()
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", dir=cwd, delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", dir=cwd, delete=False) as f:
         f.write(wrapper_code)
         wrapper_path = f.name
 
@@ -152,8 +146,7 @@ def _run_unix(args, test_script, include, exclude, data_dir):
         )
 
         if result.returncode != 0:
-            print(f"Error: micropython exited with code {result.returncode}",
-                  file=sys.stderr)
+            print(f"Error: micropython exited with code {result.returncode}", file=sys.stderr)
             if result.stderr:
                 print(result.stderr, file=sys.stderr)
             return 1
@@ -192,8 +185,14 @@ def _run_device(args, test_script, include, exclude, data_dir):
             print(f"Error: tracer not found at {cov_src}", file=sys.stderr)
             return 1
         deploy_cmd = [
-            "mpremote", "connect", device, "resume",
-            "fs", "cp", cov_src, ":mpy_coverage.py",
+            "mpremote",
+            "connect",
+            device,
+            "resume",
+            "fs",
+            "cp",
+            cov_src,
+            ":mpy_coverage.py",
         ]
         r = subprocess.run(deploy_cmd, capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
@@ -202,8 +201,14 @@ def _run_device(args, test_script, include, exclude, data_dir):
 
     # Deploy test script
     deploy_test_cmd = [
-        "mpremote", "connect", device, "resume",
-        "fs", "cp", test_script, f":{os.path.basename(test_script)}",
+        "mpremote",
+        "connect",
+        device,
+        "resume",
+        "fs",
+        "cp",
+        test_script,
+        f":{os.path.basename(test_script)}",
     ]
     r = subprocess.run(deploy_test_cmd, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
@@ -213,17 +218,21 @@ def _run_device(args, test_script, include, exclude, data_dir):
     # Generate and deploy wrapper
     wrapper_code = _generate_wrapper_script(test_script, include, exclude, mode="device")
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", dir=os.getcwd(), delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", dir=os.getcwd(), delete=False) as f:
         f.write(wrapper_code)
         wrapper_path = f.name
 
     try:
         # Deploy wrapper
         deploy_wrapper_cmd = [
-            "mpremote", "connect", device, "resume",
-            "fs", "cp", wrapper_path, ":_cov_runner.py",
+            "mpremote",
+            "connect",
+            device,
+            "resume",
+            "fs",
+            "cp",
+            wrapper_path,
+            ":_cov_runner.py",
         ]
         r = subprocess.run(deploy_wrapper_cmd, capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
@@ -232,8 +241,12 @@ def _run_device(args, test_script, include, exclude, data_dir):
 
         # Run wrapper
         run_cmd = [
-            "mpremote", "connect", device, "resume",
-            "run", ":_cov_runner.py",
+            "mpremote",
+            "connect",
+            device,
+            "resume",
+            "run",
+            ":_cov_runner.py",
         ]
         r = subprocess.run(run_cmd, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
@@ -261,8 +274,13 @@ def _run_device(args, test_script, include, exclude, data_dir):
         os.unlink(wrapper_path)
         # Clean up wrapper on device
         cleanup_cmd = [
-            "mpremote", "connect", device, "resume",
-            "fs", "rm", ":_cov_runner.py",
+            "mpremote",
+            "connect",
+            device,
+            "resume",
+            "fs",
+            "rm",
+            ":_cov_runner.py",
         ]
         subprocess.run(cleanup_cmd, capture_output=True, text=True, timeout=10)
 
@@ -358,7 +376,8 @@ def main():
         description="MicroPython coverage collection and reporting",
     )
     parser.add_argument(
-        "--data-dir", default=DEFAULT_DATA_DIR,
+        "--data-dir",
+        default=DEFAULT_DATA_DIR,
         help=f"Directory for coverage data files (default: {DEFAULT_DATA_DIR})",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -366,41 +385,60 @@ def main():
     # --- run ---
     p_run = subparsers.add_parser("run", help="Collect coverage for a test script")
     p_run.add_argument("test_script", help="Python test script to run")
-    p_run.add_argument("--device", default=None,
-                       help="Hardware target device path (triggers mpremote flow)")
-    p_run.add_argument("--micropython", default=None,
-                       help="Path to micropython binary (unix port)")
-    p_run.add_argument("--include", action="append", default=[],
-                       help="Filename substring filter to include (repeatable)")
-    p_run.add_argument("--exclude", action="append", default=[],
-                       help="Filename substring filter to exclude (repeatable)")
-    p_run.add_argument("--no-deploy", action="store_true",
-                       help="Skip auto-deploy of mpy_coverage.py to device")
+    p_run.add_argument(
+        "--device", default=None, help="Hardware target device path (triggers mpremote flow)"
+    )
+    p_run.add_argument(
+        "--micropython", default=None, help="Path to micropython binary (unix port)"
+    )
+    p_run.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Filename substring filter to include (repeatable)",
+    )
+    p_run.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Filename substring filter to exclude (repeatable)",
+    )
+    p_run.add_argument(
+        "--no-deploy", action="store_true", help="Skip auto-deploy of mpy_coverage.py to device"
+    )
     p_run.set_defaults(func=cmd_run)
 
     # --- report ---
     p_report = subparsers.add_parser("report", help="Generate merged coverage report")
     p_report.add_argument(
-        "--method", choices=["auto", "co_lines", "ast", "mpy"], default="auto",
+        "--method",
+        choices=["auto", "co_lines", "ast", "mpy"],
+        default="auto",
         help="Executable line detection method (default: auto)",
     )
-    p_report.add_argument("--source-root", default=None,
-                          help="Root directory for source files")
-    p_report.add_argument("--mpy-cross", default="mpy-cross",
-                          help="Path to mpy-cross binary")
-    p_report.add_argument("--mpy-tools-dir", default=None,
-                          help="Path to MicroPython tools/ directory")
-    p_report.add_argument("--path-map", action="append", default=[],
-                          help="Path mapping device_prefix=host_prefix (repeatable)")
+    p_report.add_argument("--source-root", default=None, help="Root directory for source files")
+    p_report.add_argument("--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary")
     p_report.add_argument(
-        "--format", dest="formats", action="append", default=[],
+        "--mpy-tools-dir", default=None, help="Path to MicroPython tools/ directory"
+    )
+    p_report.add_argument(
+        "--path-map",
+        action="append",
+        default=[],
+        help="Path mapping device_prefix=host_prefix (repeatable)",
+    )
+    p_report.add_argument(
+        "--format",
+        dest="formats",
+        action="append",
+        default=[],
         choices=["text", "html", "json", "xml", "lcov"],
         help="Output format (repeatable, default: text)",
     )
-    p_report.add_argument("--output-dir", default=None,
-                          help="Output directory for report files")
-    p_report.add_argument("--show-missing", action="store_true",
-                          help="Show missing line numbers in text report")
+    p_report.add_argument("--output-dir", default=None, help="Output directory for report files")
+    p_report.add_argument(
+        "--show-missing", action="store_true", help="Show missing line numbers in text report"
+    )
     p_report.set_defaults(func=cmd_report)
 
     # --- list ---
@@ -409,8 +447,7 @@ def main():
 
     # --- clean ---
     p_clean = subparsers.add_parser("clean", help="Remove collected coverage data")
-    p_clean.add_argument("--yes", "-y", action="store_true",
-                         help="Skip confirmation prompt")
+    p_clean.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
     p_clean.set_defaults(func=cmd_clean)
 
     args = parser.parse_args()

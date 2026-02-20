@@ -2,6 +2,7 @@
 
 MODULE_VAR = 42
 
+
 def branching(x):
     if x > 0:
         return "positive"
@@ -9,6 +10,7 @@ def branching(x):
         return "zero"
     else:
         return "negative"
+
 
 def with_nested():
     result = []
@@ -19,6 +21,7 @@ def with_nested():
     inner()
     return result
 
+
 class MyClass:
     def __init__(self, value):
         self.value = value
@@ -28,6 +31,7 @@ class MyClass:
 
     def method_b(self):
         return self.value + 1
+
 
 def run():
     # Exercise some but not all paths

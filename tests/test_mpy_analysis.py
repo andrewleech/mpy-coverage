@@ -40,11 +40,11 @@ class TestDefAndClassLines:
 
     def test_simple_functions(self, tmp_py_file):
         path = tmp_py_file(
-            "def add(a, b):\n"        # line 1 — def
-            "    return a + b\n"       # line 2 — body
+            "def add(a, b):\n"  # line 1 — def
+            "    return a + b\n"  # line 2 — body
             "\n"
-            "def subtract(a, b):\n"    # line 4 — def
-            "    return a - b\n"       # line 5 — body
+            "def subtract(a, b):\n"  # line 4 — def
+            "    return a - b\n"  # line 5 — body
         )
         result = get_executable_lines([path])
         lines = result[path]
@@ -56,12 +56,12 @@ class TestDefAndClassLines:
 
     def test_class_with_methods(self, tmp_py_file):
         path = tmp_py_file(
-            "class Calc:\n"                # line 1 — class
-            "    def add(self, a, b):\n"   # line 2 — def
-            "        return a + b\n"       # line 3 — body
+            "class Calc:\n"  # line 1 — class
+            "    def add(self, a, b):\n"  # line 2 — def
+            "        return a + b\n"  # line 3 — body
             "\n"
-            "    def sub(self, a, b):\n"   # line 5 — def
-            "        return a - b\n"       # line 6 — body
+            "    def sub(self, a, b):\n"  # line 5 — def
+            "        return a - b\n"  # line 6 — body
         )
         result = get_executable_lines([path])
         lines = result[path]
@@ -73,11 +73,11 @@ class TestDefAndClassLines:
 
     def test_nested_functions(self, tmp_py_file):
         path = tmp_py_file(
-            "def outer():\n"           # line 1 — def
-            "    x = 1\n"              # line 2 — body
-            "    def inner():\n"       # line 3 — def
-            "        return x\n"       # line 4 — body
-            "    return inner()\n"     # line 5 — body
+            "def outer():\n"  # line 1 — def
+            "    x = 1\n"  # line 2 — body
+            "    def inner():\n"  # line 3 — def
+            "        return x\n"  # line 4 — body
+            "    return inner()\n"  # line 5 — body
         )
         result = get_executable_lines([path])
         lines = result[path]
@@ -92,10 +92,7 @@ class TestFunctionBodyFirstLine:
     """Verify first line of function bodies is not dropped (bc_increment=0 bug)."""
 
     def test_single_line_function(self, tmp_py_file):
-        path = tmp_py_file(
-            "def f():\n"
-            "    return 42\n"
-        )
+        path = tmp_py_file("def f():\n    return 42\n")
         result = get_executable_lines([path])
         lines = result[path]
         assert 2 in lines, "first (only) line of function body missing"
@@ -103,9 +100,9 @@ class TestFunctionBodyFirstLine:
     def test_multiline_function(self, tmp_py_file):
         path = tmp_py_file(
             "def f(x):\n"
-            "    a = x + 1\n"          # line 2 — first body line
-            "    b = a * 2\n"          # line 3
-            "    return b\n"           # line 4
+            "    a = x + 1\n"  # line 2 — first body line
+            "    b = a * 2\n"  # line 3
+            "    return b\n"  # line 4
         )
         result = get_executable_lines([path])
         lines = result[path]
@@ -116,11 +113,11 @@ class TestFunctionBodyFirstLine:
     def test_module_level_and_function(self, tmp_py_file):
         """Module-level code and function body lines all present."""
         path = tmp_py_file(
-            "X = 1\n"                  # line 1 — module level
-            "Y = 2\n"                  # line 2 — module level
+            "X = 1\n"  # line 1 — module level
+            "Y = 2\n"  # line 2 — module level
             "\n"
-            "def f():\n"               # line 4 — def
-            "    return X + Y\n"       # line 5 — first body line
+            "def f():\n"  # line 4 — def
+            "    return X + Y\n"  # line 5 — first body line
         )
         result = get_executable_lines([path])
         lines = result[path]

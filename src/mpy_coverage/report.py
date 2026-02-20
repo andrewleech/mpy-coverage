@@ -10,7 +10,6 @@ import re
 import sys
 
 import coverage
-from coverage.data import CoverageData
 from coverage.plugin import FileReporter
 from coverage.results import analysis_from_file_reporter
 
@@ -76,16 +75,14 @@ def _resolve_executable_lines_ast(filenames, source_paths):
     for filename in filenames:
         source_path = source_paths.get(filename, filename)
         if not os.path.exists(source_path):
-            print(f"Warning: source not found for ast analysis: {source_path}",
-                  file=sys.stderr)
+            print(f"Warning: source not found for ast analysis: {source_path}", file=sys.stderr)
             continue
         try:
             parser = PythonParser(filename=source_path)
             parser.parse_source()
             result[filename] = parser.statements
         except Exception as e:
-            print(f"Warning: ast parse failed for {source_path}: {e}",
-                  file=sys.stderr)
+            print(f"Warning: ast parse failed for {source_path}: {e}", file=sys.stderr)
     return result
 
 
@@ -107,7 +104,9 @@ def _resolve_executable_lines_mpy(filenames, source_paths, mpy_cross, mpy_tools_
 
     result = {}
     for source_path, lines in raw.items():
-        original = file_map.get(source_path, file_map.get(os.path.abspath(source_path), source_path))
+        original = file_map.get(
+            source_path, file_map.get(os.path.abspath(source_path), source_path)
+        )
         result[original] = lines
     return result
 
@@ -125,7 +124,7 @@ def _apply_path_map(filenames, path_maps):
                 continue
             device_prefix, host_prefix = mapping.split("=", 1)
             if filename.startswith(device_prefix):
-                resolved = host_prefix + filename[len(device_prefix):]
+                resolved = host_prefix + filename[len(device_prefix) :]
                 break
         source_paths[filename] = resolved
     return source_paths
@@ -169,9 +168,17 @@ def merge_coverage_data(json_files):
     return merged
 
 
-def run_report(cov_data, method, source_root=None, path_maps=None,
-               mpy_cross="mpy-cross", mpy_tools_dir=None,
-               formats=None, output_dir=None, show_missing=False):
+def run_report(
+    cov_data,
+    method,
+    source_root=None,
+    path_maps=None,
+    mpy_cross="mpy-cross",
+    mpy_tools_dir=None,
+    formats=None,
+    output_dir=None,
+    show_missing=False,
+):
     """Generate coverage reports from collected data.
 
     Returns the total coverage percentage.
@@ -273,20 +280,27 @@ def main():
     )
     parser.add_argument("data_file", help="JSON coverage data file from mpy_coverage.py")
     parser.add_argument(
-        "--method", choices=["auto", "co_lines", "ast", "mpy"], default="auto",
-        help="Method for determining executable lines (default: auto)"
+        "--method",
+        choices=["auto", "co_lines", "ast", "mpy"],
+        default="auto",
+        help="Method for determining executable lines (default: auto)",
     )
     parser.add_argument("--source-root", default=None, help="Root directory for source files")
     parser.add_argument("--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary")
     parser.add_argument("--mpy-tools-dir", default=None, help="Path to MicroPython tools/ dir")
     parser.add_argument(
-        "--path-map", action="append", default=[],
-        help="Path mapping as device_prefix=host_prefix (repeatable)"
+        "--path-map",
+        action="append",
+        default=[],
+        help="Path mapping as device_prefix=host_prefix (repeatable)",
     )
     parser.add_argument(
-        "--format", dest="formats", action="append", default=[],
+        "--format",
+        dest="formats",
+        action="append",
+        default=[],
         choices=["text", "html", "json", "xml", "lcov"],
-        help="Output format (repeatable, default: text)"
+        help="Output format (repeatable, default: text)",
     )
     parser.add_argument("--output-dir", default=None, help="Output directory for report files")
     parser.add_argument("--show-missing", action="store_true", help="Show missing line numbers")

@@ -35,12 +35,8 @@ def _find_binary(env_var, names_in_path, cwd_relative):
     return None
 
 
-MPY_BINARY = _find_binary(
-    "MPY_BINARY", ["micropython"], "ports/unix/build-coverage/micropython"
-)
-MPY_CROSS = _find_binary(
-    "MPY_CROSS", ["mpy-cross"], "mpy-cross/build/mpy-cross"
-)
+MPY_BINARY = _find_binary("MPY_BINARY", ["micropython"], "ports/unix/build-coverage/micropython")
+MPY_CROSS = _find_binary("MPY_CROSS", ["mpy-cross"], "mpy-cross/build/mpy-cross")
 
 
 def _deploy_tracer():
@@ -60,7 +56,9 @@ def _cleanup_tracer(deployed):
 def run_micropython(code):
     result = subprocess.run(
         [MPY_BINARY, "-c", code],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
         cwd=TESTS_DIR,
     )
     if result.returncode != 0:
@@ -70,8 +68,13 @@ def run_micropython(code):
 
 def run_report(data_file, method, extra_args=None):
     cmd = [
-        sys.executable, "-m", "mpy_coverage.report",
-        data_file, "--method", method, "--show-missing",
+        sys.executable,
+        "-m",
+        "mpy_coverage.report",
+        data_file,
+        "--method",
+        method,
+        "--show-missing",
     ]
     if extra_args:
         cmd.extend(extra_args)
@@ -154,7 +157,7 @@ def trial_b2():
     """Trial B2: mpy pathway (host-side .mpy analysis)."""
     print("=== Trial B2: mpy ===")
     if not MPY_CROSS or not os.path.exists(MPY_CROSS):
-        print(f"SKIP: mpy-cross not found")
+        print("SKIP: mpy-cross not found")
         return True
 
     with tempfile.NamedTemporaryFile(suffix=".json", dir=TESTS_DIR, delete=False) as f:
@@ -210,8 +213,7 @@ mpy_coverage.export_json('{json_path}')
             return False
 
         for fmt in ["text", "html", "json", "xml", "lcov"]:
-            r = run_report(json_path, "co_lines",
-                           ["--format", fmt, "--output-dir", outdir])
+            r = run_report(json_path, "co_lines", ["--format", fmt, "--output-dir", outdir])
             if r.returncode != 0:
                 print(f"FAIL: {fmt} format error: {r.stderr}")
                 return False
@@ -294,8 +296,10 @@ mpy_coverage.export_json('{json_path_2}')
             print(f"  got:      {sorted(merged_lines)}")
             return False
 
-        print(f"  pass1: {len(lines1)} lines, pass2: {len(lines2)} lines, "
-              f"merged: {len(merged_lines)} lines")
+        print(
+            f"  pass1: {len(lines1)} lines, pass2: {len(lines2)} lines, "
+            f"merged: {len(merged_lines)} lines"
+        )
         print("PASS")
         return True
     finally:
@@ -311,11 +315,23 @@ def trial_cli_run_and_report():
     try:
         # Run via CLI (cli.py deploys tracer automatically)
         r = subprocess.run(
-            [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir,
-             "run", os.path.join(TESTS_DIR, "test_target.py"),
-             "--micropython", MPY_BINARY,
-             "--include", "test_target"],
-            capture_output=True, text=True, timeout=30, cwd=TESTS_DIR,
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "run",
+                os.path.join(TESTS_DIR, "test_target.py"),
+                "--micropython",
+                MPY_BINARY,
+                "--include",
+                "test_target",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: cli run error: {r.stderr}")
@@ -331,7 +347,10 @@ def trial_cli_run_and_report():
         # List via CLI
         r = subprocess.run(
             [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir, "list"],
-            capture_output=True, text=True, timeout=10, cwd=TESTS_DIR,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: cli list error: {r.stderr}")
@@ -339,33 +358,52 @@ def trial_cli_run_and_report():
         if json_files[0] not in r.stdout:
             print("FAIL: list output doesn't contain data file name")
             return False
-        print(f"  list OK")
+        print("  list OK")
 
         # Report via CLI
         r = subprocess.run(
-            [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir,
-             "report", "--method", "ast", "--show-missing"],
-            capture_output=True, text=True, timeout=30, cwd=TESTS_DIR,
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "report",
+                "--method",
+                "ast",
+                "--show-missing",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: cli report error: {r.stderr}")
             print(f"  stdout: {r.stdout}")
             return False
-        print(f"  report OK")
+        print("  report OK")
 
         # Clean via CLI
         r = subprocess.run(
             [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir, "clean", "--yes"],
-            capture_output=True, text=True, timeout=10, cwd=TESTS_DIR,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: cli clean error: {r.stderr}")
             return False
-        remaining = [f for f in os.listdir(data_dir) if f.endswith(".json")] if os.path.isdir(data_dir) else []
+        remaining = (
+            [f for f in os.listdir(data_dir) if f.endswith(".json")]
+            if os.path.isdir(data_dir)
+            else []
+        )
         if remaining:
             print(f"FAIL: clean didn't remove files: {remaining}")
             return False
-        print(f"  clean OK")
+        print("  clean OK")
 
         print("PASS")
         return True
@@ -390,10 +428,23 @@ def trial_cli_multipass():
 
         # Run pass 1 (cli.py deploys tracer automatically)
         r = subprocess.run(
-            [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir,
-             "run", test1,
-             "--micropython", MPY_BINARY, "--include", "test_target"],
-            capture_output=True, text=True, timeout=30, cwd=TESTS_DIR,
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "run",
+                test1,
+                "--micropython",
+                MPY_BINARY,
+                "--include",
+                "test_target",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: pass 1 error: {r.stderr}")
@@ -401,10 +452,23 @@ def trial_cli_multipass():
 
         # Run pass 2
         r = subprocess.run(
-            [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir,
-             "run", test2,
-             "--micropython", MPY_BINARY, "--include", "test_target"],
-            capture_output=True, text=True, timeout=30, cwd=TESTS_DIR,
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "run",
+                test2,
+                "--micropython",
+                MPY_BINARY,
+                "--include",
+                "test_target",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: pass 2 error: {r.stderr}")
@@ -415,13 +479,25 @@ def trial_cli_multipass():
         if len(json_files) != 2:
             print(f"FAIL: expected 2 data files, got {len(json_files)}")
             return False
-        print(f"  2 data files collected")
+        print("  2 data files collected")
 
         # Report (merged)
         r = subprocess.run(
-            [sys.executable, "-m", "mpy_coverage", "--data-dir", data_dir,
-             "report", "--method", "ast", "--show-missing"],
-            capture_output=True, text=True, timeout=30, cwd=TESTS_DIR,
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "report",
+                "--method",
+                "ast",
+                "--show-missing",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
         )
         if r.returncode != 0:
             print(f"FAIL: report error: {r.stderr}")
@@ -432,7 +508,7 @@ def trial_cli_multipass():
             print("FAIL: report doesn't mention test_target")
             print(f"  stdout: {r.stdout}")
             return False
-        print(f"  merged report OK")
+        print("  merged report OK")
 
         print("PASS")
         return True
@@ -443,14 +519,23 @@ def trial_cli_multipass():
                 os.unlink(f)
 
 
-ALL_TRIALS = [trial_a, trial_b1, trial_b2, trial_formats,
-              trial_merge, trial_cli_run_and_report, trial_cli_multipass]
+ALL_TRIALS = [
+    trial_a,
+    trial_b1,
+    trial_b2,
+    trial_formats,
+    trial_merge,
+    trial_cli_run_and_report,
+    trial_cli_multipass,
+]
 
 
 def main():
     if not MPY_BINARY or not os.path.exists(MPY_BINARY):
-        print(f"Error: MicroPython coverage binary not found.")
-        print("Set MPY_BINARY env var, add micropython to PATH, or run from a MicroPython checkout.")
+        print("Error: MicroPython coverage binary not found.")
+        print(
+            "Set MPY_BINARY env var, add micropython to PATH, or run from a MicroPython checkout."
+        )
         sys.exit(1)
 
     results = []
@@ -460,6 +545,7 @@ def main():
         except Exception as e:
             print(f"FAIL: {e}")
             import traceback
+
             traceback.print_exc()
             results.append(False)
         print()
