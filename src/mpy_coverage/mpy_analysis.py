@@ -101,7 +101,7 @@ def _extract_lines_from_raw_code(rc, lines):
         while line_info:
             bc_increment, line_increment, line_info = rc.decode_lineinfo(line_info)
             source_line += line_increment
-            if bc_increment > 0 and source_line > 0:
+            if (bc_increment > 0 or line_increment > 0) and source_line > 0:
                 lines.add(source_line)
 
     # Recurse into children
@@ -193,6 +193,23 @@ def get_executable_lines(
                 # Extract lines from the raw code
                 lines = set()
                 _extract_lines_from_raw_code(compiled_module.raw_code, lines)
+
+                # mpy-cross does not emit line info for def/class statement
+                # lines — it starts at the first line inside the body. Patch
+                # these in via CPython's AST parser which is safe since
+                # def/class syntax is identical between MicroPython and CPython.
+                try:
+                    import ast as ast_mod
+                    with open(py_file, encoding="utf-8") as f:
+                        tree = ast_mod.parse(f.read())
+                    for node in ast_mod.walk(tree):
+                        if isinstance(node, (ast_mod.FunctionDef,
+                                             ast_mod.AsyncFunctionDef,
+                                             ast_mod.ClassDef)):
+                            lines.add(node.lineno)
+                except Exception as e:
+                    print(f"Warning: AST patch-up failed for {py_file}: {e}",
+                          file=sys.stderr)
 
                 result[py_file] = lines
 
