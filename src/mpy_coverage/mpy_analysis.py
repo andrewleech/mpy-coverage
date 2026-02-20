@@ -98,8 +98,15 @@ def _extract_lines_from_raw_code(rc, lines):
         pass
     else:
         source_line = 1
+        first = True
         while line_info:
             bc_increment, line_increment, line_info = rc.decode_lineinfo(line_info)
+            # The first entry's bc_increment covers bytecode starting at
+            # source_line (before the increment). Record that initial line
+            # if there's real bytecode there.
+            if first and bc_increment > 0 and source_line > 0:
+                lines.add(source_line)
+                first = False
             source_line += line_increment
             if (bc_increment > 0 or line_increment > 0) and source_line > 0:
                 lines.add(source_line)

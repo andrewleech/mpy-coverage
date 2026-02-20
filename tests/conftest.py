@@ -6,7 +6,7 @@ Tests are skipped if the micropython binary is not available.
 
 import pytest
 
-from tests.test_coverage import ALL_TRIALS, MPY_BINARY
+from test_coverage import ALL_TRIALS, MPY_BINARY
 import os
 
 requires_micropython = pytest.mark.skipif(
