@@ -99,6 +99,17 @@ Data stored in `.mpy_coverage/` by default, override with `--data-dir`.
 
 Other subcommands: `mpy-coverage list` and `mpy-coverage clean`.
 
+## Branch coverage
+
+Collect arc (branch) data during runs and generate branch-aware reports:
+
+```bash
+mpy-coverage run test_myapp.py --include myapp --branch
+mpy-coverage report --show-missing --branch
+```
+
+The `--branch` flag on `run` enables arc collection in the tracer. The `--branch` flag on `report` activates branch columns (Branch, BrPart) in the output. If `--branch` is passed to `report` but no arc data is present, it falls back to line-only mode with a warning.
+
 ## Tracer API
 
 For direct use without the CLI wrapper. This runs on the MicroPython device, not the host.
@@ -112,6 +123,11 @@ myapp.main()
 mpy_coverage.stop()
 mpy_coverage.export_json('coverage.json')  # to file
 mpy_coverage.export_json()                 # to stdout with delimiters
+```
+
+With branch coverage:
+```python
+mpy_coverage.start(include=['myapp'], collect_arcs=True)
 ```
 
 Context manager form:
@@ -145,11 +161,13 @@ Three methods for determining which lines are executable:
 ```json
 {
   "executed": {"filename.py": [1, 3, 5, 7]},
-  "executable": {"filename.py": [1, 2, 3, 5, 6, 7, 10]}
+  "executable": {"filename.py": [1, 2, 3, 5, 6, 7, 10]},
+  "arcs": {"filename.py": [[-1, 1], [1, 3], [3, 5], [5, -1]]}
 }
 ```
 
-`executable` key only present when `collect_executable=True`.
+- `executable` key only present when `collect_executable=True`
+- `arcs` key only present when `collect_arcs=True` (or `--branch` on CLI)
 
 ## Limitations
 

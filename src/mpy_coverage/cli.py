@@ -54,12 +54,13 @@ def _extract_json_from_output(output):
     return json.loads(match.group(1))
 
 
-def _generate_wrapper_script(test_script, include, exclude, mode="unix"):
+def _generate_wrapper_script(test_script, include, exclude, mode="unix", collect_arcs=False):
     """Generate a temporary wrapper script for coverage collection."""
     abs_test = os.path.abspath(test_script)
 
     inc_arg = repr(include) if include else "None"
     exc_arg = repr(exclude) if exclude else "None"
+    arcs_arg = "True" if collect_arcs else "False"
 
     if mode == "unix":
         run_line = f'exec(compile(open("{abs_test}").read(), "{abs_test}", "exec"))'
@@ -70,7 +71,8 @@ def _generate_wrapper_script(test_script, include, exclude, mode="unix"):
 
     return (
         "import mpy_coverage\n"
-        f"mpy_coverage.start(include={inc_arg}, exclude={exc_arg})\n"
+        f"mpy_coverage.start(include={inc_arg}, exclude={exc_arg}, "
+        f"collect_arcs={arcs_arg})\n"
         f"{run_line}\n"
         "mpy_coverage.stop()\n"
         "mpy_coverage.export_json()\n"
@@ -101,14 +103,17 @@ def cmd_run(args):
 
     include = args.include or None
     exclude = args.exclude or None
+    collect_arcs = getattr(args, "branch", False)
 
     if args.device:
-        return _run_device(args, test_script, include, exclude, data_dir)
+        return _run_device(
+            args, test_script, include, exclude, data_dir, collect_arcs=collect_arcs
+        )
     else:
-        return _run_unix(args, test_script, include, exclude, data_dir)
+        return _run_unix(args, test_script, include, exclude, data_dir, collect_arcs=collect_arcs)
 
 
-def _run_unix(args, test_script, include, exclude, data_dir):
+def _run_unix(args, test_script, include, exclude, data_dir, collect_arcs=False):
     """Run coverage collection using unix micropython binary."""
     mp = args.micropython or _find_micropython()
     if mp is None:
@@ -119,7 +124,9 @@ def _run_unix(args, test_script, include, exclude, data_dir):
         )
         return 1
 
-    wrapper_code = _generate_wrapper_script(test_script, include, exclude, mode="unix")
+    wrapper_code = _generate_wrapper_script(
+        test_script, include, exclude, mode="unix", collect_arcs=collect_arcs
+    )
 
     # Write wrapper to a temp file in the current working directory so that
     # relative imports from the test script work correctly.
@@ -174,7 +181,7 @@ def _run_unix(args, test_script, include, exclude, data_dir):
             os.unlink(tracer_dst)
 
 
-def _run_device(args, test_script, include, exclude, data_dir):
+def _run_device(args, test_script, include, exclude, data_dir, collect_arcs=False):
     """Run coverage collection on a hardware target via mpremote."""
     device = args.device
 
@@ -216,7 +223,9 @@ def _run_device(args, test_script, include, exclude, data_dir):
         return 1
 
     # Generate and deploy wrapper
-    wrapper_code = _generate_wrapper_script(test_script, include, exclude, mode="device")
+    wrapper_code = _generate_wrapper_script(
+        test_script, include, exclude, mode="device", collect_arcs=collect_arcs
+    )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", dir=os.getcwd(), delete=False) as f:
         f.write(wrapper_code)
@@ -315,6 +324,7 @@ def cmd_report(args):
         formats=formats,
         output_dir=args.output_dir,
         show_missing=args.show_missing,
+        branch=getattr(args, "branch", False),
     )
     return 0
 
@@ -406,6 +416,9 @@ def main():
     p_run.add_argument(
         "--no-deploy", action="store_true", help="Skip auto-deploy of mpy_coverage.py to device"
     )
+    p_run.add_argument(
+        "--branch", action="store_true", help="Collect arc data for branch coverage"
+    )
     p_run.set_defaults(func=cmd_run)
 
     # --- report ---
@@ -439,6 +452,7 @@ def main():
     p_report.add_argument(
         "--show-missing", action="store_true", help="Show missing line numbers in text report"
     )
+    p_report.add_argument("--branch", action="store_true", help="Enable branch coverage reporting")
     p_report.set_defaults(func=cmd_report)
 
     # --- list ---

@@ -5,9 +5,12 @@ import json
 
 _executed = {}
 _executable = {}
+_arcs = {}
+_last_line_stack = []  # Stack of (filename, last_line) for nested calls
 _include = None
 _exclude = None
 _collect_executable = False
+_collect_arcs = False
 _seen_codes = set()
 
 
@@ -30,6 +33,21 @@ def _local_trace(frame, event, arg):
         if filename not in _executed:
             _executed[filename] = set()
         _executed[filename].add(lineno)
+        if _collect_arcs and _last_line_stack:
+            entry = _last_line_stack[-1]
+            if filename not in _arcs:
+                _arcs[filename] = set()
+            if entry[1] is not None and entry[0] == filename:
+                _arcs[filename].add((entry[1], lineno))
+            _last_line_stack[-1] = (filename, lineno)
+    elif event == "return" and _collect_arcs:
+        filename = frame.f_code.co_filename
+        if _last_line_stack:
+            entry = _last_line_stack.pop()
+            if entry[1] is not None and entry[0] == filename:
+                if filename not in _arcs:
+                    _arcs[filename] = set()
+                _arcs[filename].add((entry[1], -frame.f_code.co_firstlineno))
     return _local_trace
 
 
@@ -52,18 +70,28 @@ def _global_trace(frame, event, arg):
                 except (AttributeError, TypeError):
                     pass
 
+        if _collect_arcs:
+            if filename not in _arcs:
+                _arcs[filename] = set()
+            # Entry arc: from negative first line to the actual first line
+            _arcs[filename].add((-frame.f_code.co_firstlineno, frame.f_lineno))
+            _last_line_stack.append((filename, frame.f_lineno))
+
         return _local_trace
     return None
 
 
-def start(include=None, exclude=None, collect_executable=False):
-    global _include, _exclude, _collect_executable
+def start(include=None, exclude=None, collect_executable=False, collect_arcs=False):
+    global _include, _exclude, _collect_executable, _collect_arcs
     _executed.clear()
     _executable.clear()
+    _arcs.clear()
+    _last_line_stack.clear()
     _seen_codes.clear()
     _include = include
     _exclude = exclude
     _collect_executable = collect_executable
+    _collect_arcs = collect_arcs
     sys.settrace(_global_trace)
 
 
@@ -79,6 +107,10 @@ def get_data():
         data["executable"] = {}
         for filename, lines in _executable.items():
             data["executable"][filename] = sorted(list(lines))
+    if _collect_arcs:
+        data["arcs"] = {}
+        for filename, arcs in _arcs.items():
+            data["arcs"][filename] = sorted([list(a) for a in arcs])
     return data
 
 
@@ -96,13 +128,14 @@ def export_json(path=None):
 
 
 class coverage:
-    def __init__(self, include=None, exclude=None, collect_executable=False):
+    def __init__(self, include=None, exclude=None, collect_executable=False, collect_arcs=False):
         self.include = include
         self.exclude = exclude
         self.collect_executable = collect_executable
+        self.collect_arcs = collect_arcs
 
     def __enter__(self):
-        start(self.include, self.exclude, self.collect_executable)
+        start(self.include, self.exclude, self.collect_executable, self.collect_arcs)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

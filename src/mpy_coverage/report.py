@@ -21,6 +21,8 @@ class MpyFileReporter(FileReporter):
         super().__init__(filename)
         self._executable_lines = executable_lines
         self._source_path = source_path or filename
+        self._arcs = None
+        self._exit_counts = None
 
     def lines(self):
         return self._executable_lines
@@ -31,6 +33,39 @@ class MpyFileReporter(FileReporter):
 
     def relative_filename(self):
         return self.filename
+
+    def _parse_arcs(self):
+        """Lazily compute possible arcs and exit counts from PythonParser."""
+        if self._arcs is not None:
+            return
+        from coverage.parser import PythonParser
+
+        try:
+            parser = PythonParser(filename=self._source_path)
+            parser.parse_source()
+            self._arcs = parser.arcs()
+        except Exception as e:
+            print(f"Warning: arc analysis failed for {self._source_path}: {e}", file=sys.stderr)
+            self._arcs = set()
+
+        # Derive exit counts: number of distinct destinations per source line
+        from collections import defaultdict
+
+        dests = defaultdict(set)
+        for from_line, to_line in self._arcs:
+            dests[from_line].add(to_line)
+        self._exit_counts = {line: len(targets) for line, targets in dests.items()}
+
+    def arcs(self):
+        self._parse_arcs()
+        return self._arcs
+
+    def exit_counts(self):
+        self._parse_arcs()
+        return self._exit_counts
+
+    def no_branch_lines(self):
+        return set()
 
 
 class MpyCoverage(coverage.Coverage):
@@ -146,14 +181,14 @@ def _load_json(path):
 def merge_coverage_data(json_files):
     """Merge multiple coverage JSON files into a single data dict.
 
-    Only executed line data is merged (union of line sets per file).
+    Merges executed line data and arc data (union per file).
     Executable line data is not merged as it is computed at report time.
 
     Args:
         json_files: List of paths to JSON coverage data files.
 
     Returns:
-        Dict with merged "executed" data: {filename: sorted_line_list}.
+        Dict with merged "executed" and optionally "arcs" data.
     """
     merged = {"executed": {}}
     for path in json_files:
@@ -162,9 +197,20 @@ def merge_coverage_data(json_files):
             if filename not in merged["executed"]:
                 merged["executed"][filename] = set()
             merged["executed"][filename].update(lines)
+        if "arcs" in data:
+            if "arcs" not in merged:
+                merged["arcs"] = {}
+            for filename, arcs in data["arcs"].items():
+                if filename not in merged["arcs"]:
+                    merged["arcs"][filename] = set()
+                for arc in arcs:
+                    merged["arcs"][filename].add(tuple(arc))
     # Convert sets to sorted lists
     for filename in merged["executed"]:
         merged["executed"][filename] = sorted(merged["executed"][filename])
+    if "arcs" in merged:
+        for filename in merged["arcs"]:
+            merged["arcs"][filename] = sorted([list(a) for a in merged["arcs"][filename]])
     return merged
 
 
@@ -178,6 +224,7 @@ def run_report(
     formats=None,
     output_dir=None,
     show_missing=False,
+    branch=False,
 ):
     """Generate coverage reports from collected data.
 
@@ -187,6 +234,16 @@ def run_report(
         formats = ["text"]
     if path_maps is None:
         path_maps = []
+
+    # Check if branch was requested but no arc data available
+    arc_data = cov_data.get("arcs", {})
+    if branch and not arc_data:
+        print(
+            "Warning: --branch requested but no arc data in coverage JSON. "
+            "Falling back to line-only mode.",
+            file=sys.stderr,
+        )
+        branch = False
 
     executed = cov_data.get("executed", {})
     filenames = list(executed.keys())
@@ -235,17 +292,31 @@ def run_report(
         print("No files to report on.", file=sys.stderr)
         return 0.0
 
-    # Create CoverageData and inject executed lines
+    # Create CoverageData and inject coverage data
     cov_obj = MpyCoverage(file_reporters, data_file=None)
     cov_obj._init()
     cov_obj._post_init()
 
     data = cov_obj.get_data()
-    line_data = {}
-    for filename, lines in executed.items():
-        if filename in file_reporters:
-            line_data[filename] = set(lines)
-    data.add_lines(line_data)
+    if branch:
+        # Inject arc data — add_arcs and add_lines are mutually exclusive
+        injected_arcs = {}
+        for filename, arcs in arc_data.items():
+            if filename in file_reporters:
+                # Filter self-loop arcs (l1 == l2)
+                arc_set = set()
+                for arc in arcs:
+                    from_line, to_line = arc[0], arc[1]
+                    if from_line != to_line:
+                        arc_set.add((from_line, to_line))
+                injected_arcs[filename] = arc_set
+        data.add_arcs(injected_arcs)
+    else:
+        line_data = {}
+        for filename, lines in executed.items():
+            if filename in file_reporters:
+                line_data[filename] = set(lines)
+        data.add_lines(line_data)
 
     total = 0.0
 
@@ -304,6 +375,7 @@ def main():
     )
     parser.add_argument("--output-dir", default=None, help="Output directory for report files")
     parser.add_argument("--show-missing", action="store_true", help="Show missing line numbers")
+    parser.add_argument("--branch", action="store_true", help="Enable branch coverage reporting")
 
     args = parser.parse_args()
 
@@ -322,6 +394,7 @@ def main():
         formats=args.formats,
         output_dir=args.output_dir,
         show_missing=args.show_missing,
+        branch=args.branch,
     )
 
 

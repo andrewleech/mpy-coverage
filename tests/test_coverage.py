@@ -519,6 +519,130 @@ def trial_cli_multipass():
                 os.unlink(f)
 
 
+def trial_branch():
+    """Test branch/arc coverage collection via tracer API."""
+    print("=== Branch coverage ===")
+    with tempfile.NamedTemporaryFile(suffix=".json", dir=TESTS_DIR, delete=False) as f:
+        json_path = f.name
+
+    deployed = _deploy_tracer()
+    try:
+        r = run_micropython(f"""
+import mpy_coverage
+mpy_coverage.start(include=['test_target'], collect_arcs=True)
+import test_target
+test_target.run()
+mpy_coverage.stop()
+mpy_coverage.export_json('{json_path}')
+""")
+        if r.returncode != 0:
+            print("FAIL: MicroPython exited with error")
+            return False
+
+        data = json.load(open(json_path))
+        assert "executed" in data, "Missing 'executed' key"
+        assert "arcs" in data, "Missing 'arcs' key (branch mode)"
+        assert "test_target.py" in data["arcs"], "test_target.py not in arcs"
+
+        arcs = data["arcs"]["test_target.py"]
+        assert len(arcs) > 0, "No arcs collected"
+        # Each arc is [from, to]
+        for arc in arcs:
+            assert len(arc) == 2, f"Bad arc format: {arc}"
+
+        # Generate branch report
+        r = run_report(json_path, "ast", ["--branch"])
+        print(r.stdout)
+        if r.returncode != 0:
+            print(f"FAIL: branch report error: {r.stderr}")
+            return False
+
+        # Branch report should have Branch/BrPart columns
+        if "Branch" not in r.stdout:
+            print("FAIL: branch report missing Branch column")
+            return False
+
+        print("PASS")
+        return True
+    finally:
+        os.unlink(json_path)
+        _cleanup_tracer(deployed)
+
+
+def trial_branch_cli():
+    """Test branch coverage end-to-end via CLI."""
+    print("=== Branch CLI ===")
+    data_dir = tempfile.mkdtemp(prefix="mpy_cov_branch_")
+
+    try:
+        # Run with --branch via CLI
+        r = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "run",
+                os.path.join(TESTS_DIR, "test_target.py"),
+                "--micropython",
+                MPY_BINARY,
+                "--include",
+                "test_target",
+                "--branch",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
+        )
+        if r.returncode != 0:
+            print(f"FAIL: cli run --branch error: {r.stderr}")
+            return False
+
+        # Verify JSON has arcs
+        json_files = [f for f in os.listdir(data_dir) if f.endswith(".json")]
+        assert len(json_files) == 1, f"Expected 1 data file, got {len(json_files)}"
+        with open(os.path.join(data_dir, json_files[0])) as f:
+            data = json.load(f)
+        assert "arcs" in data, "Missing arcs in JSON from --branch run"
+        print(f"  run created: {json_files[0]} with arcs")
+
+        # Report with --branch
+        r = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "report",
+                "--method",
+                "ast",
+                "--show-missing",
+                "--branch",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=TESTS_DIR,
+        )
+        if r.returncode != 0:
+            print(f"FAIL: cli report --branch error: {r.stderr}")
+            print(f"  stdout: {r.stdout}")
+            return False
+
+        if "Branch" not in r.stdout:
+            print("FAIL: branch report missing Branch column in CLI output")
+            return False
+        print("  branch report OK")
+
+        print("PASS")
+        return True
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+
+
 ALL_TRIALS = [
     trial_a,
     trial_b1,
@@ -527,6 +651,8 @@ ALL_TRIALS = [
     trial_merge,
     trial_cli_run_and_report,
     trial_cli_multipass,
+    trial_branch,
+    trial_branch_cli,
 ]
 
 
