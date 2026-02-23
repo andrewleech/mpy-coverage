@@ -606,7 +606,8 @@ def trial_branch_cli():
         with open(os.path.join(data_dir, json_files[0])) as f:
             data = json.load(f)
         assert "arcs" in data, "Missing arcs in JSON from --branch run"
-        print(f"  run created: {json_files[0]} with arcs")
+        assert "_metadata" in data, "Missing _metadata in JSON"
+        print(f"  run created: {json_files[0]} with arcs and metadata")
 
         # Report with --branch
         r = subprocess.run(
@@ -643,6 +644,132 @@ def trial_branch_cli():
         shutil.rmtree(data_dir, ignore_errors=True)
 
 
+def trial_test_map():
+    """Test test-map subcommand with metadata."""
+    print("=== Test map ===")
+    data_dir = tempfile.mkdtemp(prefix="mpy_cov_testmap_")
+
+    # Create two small test scripts that exercise different paths
+    test1 = os.path.join(TESTS_DIR, "_cov_testmap_1.py")
+    test2 = os.path.join(TESTS_DIR, "_cov_testmap_2.py")
+
+    try:
+        with open(test1, "w") as f:
+            f.write("import test_target\ntest_target.run()\n")
+        with open(test2, "w") as f:
+            f.write("import test_target\ntest_target.with_nested()\ntest_target.branching(-1)\n")
+
+        # Run both tests (CLI auto-adds metadata with test_script name)
+        for test_path in (test1, test2):
+            r = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "mpy_coverage",
+                    "--data-dir",
+                    data_dir,
+                    "run",
+                    test_path,
+                    "--micropython",
+                    MPY_BINARY,
+                    "--include",
+                    "test_target",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=TESTS_DIR,
+            )
+            if r.returncode != 0:
+                print(f"FAIL: run error for {test_path}: {r.stderr}")
+                return False
+
+        # Verify _metadata in JSON files
+        json_files = sorted(
+            [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".json")]
+        )
+        assert len(json_files) == 2, f"Expected 2 data files, got {len(json_files)}"
+        for jf in json_files:
+            with open(jf) as f:
+                data = json.load(f)
+            assert "_metadata" in data, f"Missing _metadata in {jf}"
+            assert "test_script" in data["_metadata"], f"Missing test_script in {jf}"
+        print("  metadata present in both JSON files")
+
+        # File-level test-map
+        r = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "test-map",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=TESTS_DIR,
+        )
+        if r.returncode != 0:
+            print(f"FAIL: test-map error: {r.stderr}")
+            return False
+
+        # Should mention test_target.py and both test names
+        if "test_target.py" not in r.stdout:
+            print("FAIL: test-map missing test_target.py")
+            return False
+        if "_cov_testmap_1" not in r.stdout or "_cov_testmap_2" not in r.stdout:
+            print("FAIL: test-map missing test script names")
+            return False
+        # Check column alignment (all lines should have same comma positions)
+        lines = [ln for ln in r.stdout.strip().split("\n") if ln.strip()]
+        comma_positions = set()
+        for line in lines:
+            pos = line.index(",")
+            comma_positions.add(pos)
+        if len(comma_positions) != 1:
+            print(f"FAIL: columns not aligned, comma positions: {comma_positions}")
+            return False
+        print("  file-level test-map OK")
+
+        # Line-detail test-map
+        r = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mpy_coverage",
+                "--data-dir",
+                data_dir,
+                "test-map",
+                "--line-detail",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=TESTS_DIR,
+        )
+        if r.returncode != 0:
+            print(f"FAIL: test-map --line-detail error: {r.stderr}")
+            return False
+
+        if "test_target.py" not in r.stdout:
+            print("FAIL: line-detail test-map missing test_target.py")
+            return False
+        # Line-detail has 3 columns: app_file, line, test
+        header = r.stdout.strip().split("\n")[0]
+        assert header.count(",") == 2, f"Expected 3 columns (2 commas), got: {header}"
+        print("  line-detail test-map OK")
+
+        print("PASS")
+        return True
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+        for f in (test1, test2):
+            if os.path.exists(f):
+                os.unlink(f)
+
+
 ALL_TRIALS = [
     trial_a,
     trial_b1,
@@ -653,6 +780,7 @@ ALL_TRIALS = [
     trial_cli_multipass,
     trial_branch,
     trial_branch_cli,
+    trial_test_map,
 ]
 
 

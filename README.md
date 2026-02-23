@@ -110,6 +110,39 @@ mpy-coverage report --show-missing --branch
 
 The `--branch` flag on `run` enables arc collection in the tracer. The `--branch` flag on `report` activates branch columns (Branch, BrPart) in the output. If `--branch` is passed to `report` but no arc data is present, it falls back to line-only mode with a warning.
 
+## Test map
+
+Show which tests cover which application files:
+
+```bash
+mpy-coverage run tests/test_a.py --include myapp
+mpy-coverage run tests/test_b.py --include myapp
+mpy-coverage test-map
+```
+
+Output:
+```
+app_file    , test
+myapp.py    , test_a
+myapp.py    , test_b
+helpers.py  , test_a
+```
+
+For per-line detail:
+```bash
+mpy-coverage test-map --line-detail
+```
+
+Output:
+```
+app_file    , line, test
+myapp.py    , 1   , test_a
+myapp.py    , 1   , test_b
+myapp.py    , 5   , test_a
+```
+
+Test names are extracted from `_metadata.test_script` in the JSON (set automatically by the CLI), with a filename-based fallback for older data files.
+
 ## Tracer API
 
 For direct use without the CLI wrapper. This runs on the MicroPython device, not the host.
@@ -125,9 +158,9 @@ mpy_coverage.export_json('coverage.json')  # to file
 mpy_coverage.export_json()                 # to stdout with delimiters
 ```
 
-With branch coverage:
+With branch coverage and test metadata:
 ```python
-mpy_coverage.start(include=['myapp'], collect_arcs=True)
+mpy_coverage.start(include=['myapp'], collect_arcs=True, test_script='test_myapp')
 ```
 
 Context manager form:
@@ -160,6 +193,7 @@ Three methods for determining which lines are executable:
 
 ```json
 {
+  "_metadata": {"test_script": "test_myapp"},
   "executed": {"filename.py": [1, 3, 5, 7]},
   "executable": {"filename.py": [1, 2, 3, 5, 6, 7, 10]},
   "arcs": {"filename.py": [[-1, 1], [1, 3], [3, 5], [5, -1]]}
@@ -168,6 +202,7 @@ Three methods for determining which lines are executable:
 
 - `executable` key only present when `collect_executable=True`
 - `arcs` key only present when `collect_arcs=True` (or `--branch` on CLI)
+- `_metadata` key only present when `test_script` is set (automatic via CLI)
 
 ## Limitations
 
