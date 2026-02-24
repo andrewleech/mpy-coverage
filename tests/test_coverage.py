@@ -75,10 +75,15 @@ def run_report(data_file, method, extra_args=None):
         "--method",
         method,
         "--show-missing",
+        "--source-root",
+        TESTS_DIR,
     ]
     if extra_args:
         cmd.extend(extra_args)
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=TESTS_DIR)
+    # Run from project root, not TESTS_DIR — the deployed mpy_coverage.py tracer
+    # in TESTS_DIR shadows the installed mpy_coverage package if CWD is tests/.
+    project_root = os.path.dirname(TESTS_DIR)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
     return result
 
 
