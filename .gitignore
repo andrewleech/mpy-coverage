@@ -6,3 +6,4 @@ build/
 .venv/
 .mpy_coverage/
 *.mpy
+src/mpy_coverage/_version.py

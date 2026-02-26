@@ -1,6 +1,6 @@
 """MicroPython code coverage toolchain."""
 
-__version__ = "0.1.0"
+from mpy_coverage._version import __version__  # noqa: F401
 
 
 def __getattr__(name):
