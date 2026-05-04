@@ -13,6 +13,9 @@ dependencies = ["coverage", "mpy-cross"]
 [project.scripts]
 mpy-coverage = "mpy_coverage.cli:main"
 
+[project.urls]
+Repository = "https://github.com/andrewleech/mpy-coverage"
+
 [dependency-groups]
 dev = ["pytest", "ruff"]
 
